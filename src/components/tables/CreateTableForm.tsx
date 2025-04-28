@@ -18,21 +18,25 @@ interface Column {
   };
 }
 
+interface Index {
+  name: string;
+  columns: string[];
+  isUnique: boolean;
+}
+
 interface Table {
   id?: string;
   name: string;
   description?: string;
   columns: Column[];
-  indexes: {
-    name: string;
-    columns: string[];
-    isUnique: boolean;
-  }[];
+  indexes?: Index[];
+  createdAt?: string;
 }
 
 interface CreateTableFormProps {
   existingTables?: Table[];
   onTableCreated: (table: Table) => void;
+  initialTableData?: Table;
 }
 
 const dataTypes = [
@@ -53,21 +57,24 @@ const dataTypes = [
 const CreateTableForm: React.FC<CreateTableFormProps> = ({
   existingTables = [],
   onTableCreated,
+  initialTableData,
 }) => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const [projectDbType, setProjectDbType] = useState<string>("PostgreSQL"); // This would come from project data
+  const [projectDbType, setProjectDbType] = useState<string>("PostgreSQL");
 
-  const [tableData, setTableData] = useState<Table>({
+  const [tableData, setTableData] = useState<Table>(
+    initialTableData || {
+      name: "",
+      description: "",
+      columns: [],
+      indexes: [],
+    }
+  );
+
+  const [newIndex, setNewIndex] = useState<Index>({
     name: "",
-    description: "",
     columns: [],
-    indexes: [],
-  });
-
-  const [newIndex, setNewIndex] = useState({
-    name: "",
-    columns: [] as string[],
     isUnique: false,
   });
 
@@ -76,7 +83,12 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
   >({});
   const [showIndexForm, setShowIndexForm] = useState(false);
 
-  // Add a new column
+  useEffect(() => {
+    if (initialTableData) {
+      setTableData(initialTableData);
+    }
+  }, [initialTableData]);
+
   const handleAddColumn = () => {
     setTableData({
       ...tableData,
@@ -94,7 +106,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     });
   };
 
-  // Update column data
   const handleColumnChange = (
     index: number,
     field: keyof Column,
@@ -102,12 +113,10 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
   ) => {
     const newColumns = [...tableData.columns];
 
-    // If setting a column as primary key, ensure uniqueness and required
     if (field === "isPrimary" && value === true) {
       newColumns[index].unique = true;
       newColumns[index].required = true;
 
-      // Make sure only one primary key exists
       if (value) {
         newColumns.forEach((col, idx) => {
           if (idx !== index) {
@@ -120,7 +129,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     newColumns[index] = { ...newColumns[index], [field]: value };
     setTableData({ ...tableData, columns: newColumns });
 
-    // Clear validation errors
     if (validationErrors[`column_${index}_${String(field)}`]) {
       const newErrors = { ...validationErrors };
       delete newErrors[`column_${index}_${String(field)}`];
@@ -128,20 +136,18 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     }
   };
 
-  // Delete a column
   const handleDeleteColumn = (index: number) => {
     const newColumns = [...tableData.columns];
     newColumns.splice(index, 1);
 
-    // Update indexes to remove any references to this column
-    const updatedIndexes = tableData.indexes
+    const updatedIndexes = (tableData.indexes || [])
       .map((idx) => ({
         ...idx,
         columns: idx.columns.filter(
           (col) => col !== tableData.columns[index].name
         ),
       }))
-      .filter((idx) => idx.columns.length > 0); // Remove empty indexes
+      .filter((idx) => idx.columns.length > 0);
 
     setTableData({
       ...tableData,
@@ -150,47 +156,35 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     });
   };
 
-  // Handle index column selection
   const handleIndexColumnToggle = (columnName: string) => {
     setNewIndex((prev) => {
       const newColumns = prev.columns.includes(columnName)
         ? prev.columns.filter((c) => c !== columnName)
         : [...prev.columns, columnName];
-
-      return {
-        ...prev,
-        columns: newColumns,
-      };
+      return { ...prev, columns: newColumns };
     });
   };
 
-  // Add new index
   const handleAddIndex = () => {
     if (newIndex.name && newIndex.columns.length > 0) {
       setTableData({
         ...tableData,
-        indexes: [...tableData.indexes, { ...newIndex }],
+        indexes: [...(tableData.indexes || []), { ...newIndex }],
       });
-
-      // Reset form
-      setNewIndex({
-        name: "",
-        columns: [],
-        isUnique: false,
-      });
+      setNewIndex({ name: "", columns: [], isUnique: false });
       setShowIndexForm(false);
     }
   };
 
-  // Delete an index
   const handleDeleteIndex = (indexName: string) => {
     setTableData({
       ...tableData,
-      indexes: tableData.indexes.filter((idx) => idx.name !== indexName),
+      indexes: (tableData.indexes || []).filter(
+        (idx) => idx.name !== indexName
+      ),
     });
   };
 
-  // Validate form before submission
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -202,13 +196,11 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
       errors.columns = "At least one column is required";
     }
 
-    // Check column names and types
     tableData.columns.forEach((column, index) => {
       if (!column.name.trim()) {
         errors[`column_${index}_name`] = "Column name is required";
       }
 
-      // Check for duplicate column names
       const columnNameCount = tableData.columns.filter(
         (c) => c.name === column.name
       ).length;
@@ -217,7 +209,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
       }
     });
 
-    // Ensure we have at least one primary key
     if (!tableData.columns.some((col) => col.isPrimary)) {
       errors.primaryKey =
         "At least one column must be designated as a primary key";
@@ -227,13 +218,9 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  // Submit form
   const handleSubmit = () => {
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
-    // Add timestamps
     const tableWithTimestamps = {
       ...tableData,
       columns: [
@@ -257,24 +244,22 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
       ],
     };
 
-    // Add unique ID to the table
     const newTable = {
       ...tableWithTimestamps,
-      id: `table_${Date.now()}`,
-      createdAt: new Date().toISOString(),
+      id: tableData.id || `table_${Date.now()}`,
+      createdAt: tableData.createdAt || new Date().toISOString(),
     };
 
-    // Call the parent callback with the new table
     onTableCreated(newTable);
-
-    // Redirect to tables list
     navigate(`/projects/${projectId}/tables`);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Create New Table</h2>
+        <h2 className="text-2xl font-bold text-gray-900">
+          {initialTableData ? "Edit Table" : "Create New Table"}
+        </h2>
         <Button
           variant="primary"
           leftIcon={<Save size={16} />}
@@ -286,7 +271,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
 
       <Card className="p-6">
         <div className="space-y-6">
-          {/* Basic Info */}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -331,7 +315,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
             </div>
           </div>
 
-          {/* Columns */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-gray-900">Columns</h3>
@@ -359,7 +342,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
 
             {tableData.columns.length > 0 ? (
               <div className="space-y-4">
-                {/* Column Headers */}
                 <div className="grid grid-cols-12 gap-2 px-4 text-sm font-medium text-gray-500">
                   <div className="col-span-3">NAME</div>
                   <div className="col-span-2">TYPE</div>
@@ -367,7 +349,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
                   <div className="col-span-2">ACTIONS</div>
                 </div>
 
-                {/* Column Rows */}
                 {tableData.columns.map((column, index) => (
                   <div
                     key={index}
@@ -485,7 +466,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
                         </label>
                       </div>
 
-                      {/* Foreign Key Setting */}
                       {existingTables.length > 0 && (
                         <div className="mt-2 flex items-center">
                           <LinkIcon size={14} className="text-gray-400 mr-1" />
@@ -553,7 +533,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
             )}
           </div>
 
-          {/* Indexes (Only for MySQL and PostgreSQL) */}
           {(projectDbType === "PostgreSQL" || projectDbType === "MySQL") && (
             <div>
               <div className="flex justify-between items-center mb-4">
@@ -569,7 +548,6 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
                 </Button>
               </div>
 
-              {/* Index Form */}
               {showIndexForm && (
                 <Card className="p-4 mb-4 bg-gray-50">
                   <div className="space-y-4">
@@ -663,10 +641,9 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
                 </Card>
               )}
 
-              {/* Indexes List */}
-              {tableData.indexes.length > 0 ? (
+              {(tableData.indexes || []).length > 0 ? (
                 <div className="space-y-3">
-                  {tableData.indexes.map((index, idx) => (
+                  {(tableData.indexes || []).map((index, idx) => (
                     <div
                       key={idx}
                       className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"

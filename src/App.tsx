@@ -4,6 +4,10 @@ import { useAuth } from "./hooks/useAuth";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
 import LoadingScreen from "./components/common/LoadingScreen";
+// import CreateAPI from "./components/apis/CreateAPI";
+import CreateAPI from "./components/apis/CreateAPI2";
+import TableView from "./components/tables/TableView";
+import "./styles/globals.css";
 
 // Lazy-loaded components
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -32,7 +36,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-function App() {
+const App: React.FC = () => {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
@@ -54,15 +58,13 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:projectId" element={<ProjectDetail />} />
-          <Route
-            path="projects/:projectId/apis/new"
-            element={<CreateApiForm />}
-          />
+          <Route path="projects/:projectId/apis/new" element={<CreateAPI />} />
           <Route
             path="projects/:projectId/apis/:apiId"
             element={<ApiDetail />}
           />
           <Route path="tables" element={<TableManager />} />
+          <Route path="/tables/:tableId" element={<TableView />} />
           <Route path="services" element={<ComingSoon title="Services" />} />
           <Route path="data" element={<ComingSoon title="Data" />} />
 
@@ -83,7 +85,7 @@ function App() {
       </Routes>
     </Suspense>
   );
-}
+};
 
 // Simple coming soon component
 const ComingSoon = ({ title }: { title: string }) => (
