@@ -7,7 +7,8 @@ import LoadingScreen from "./components/common/LoadingScreen";
 // import CreateAPI from "./components/apis/CreateAPI";
 import CreateAPI from "./components/apis/CreateAPI2";
 import TableView from "./components/tables/TableView";
-import "./styles/globals.css";
+import "./index.css";
+import CreateTableFormWrapper from "./components/tables/CreateTableFormWrapper";
 
 // Lazy-loaded components
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -25,9 +26,12 @@ const AppearanceSettings = lazy(
 const TableManager = lazy(() => import("./components/tables/TableManager"));
 const CreateApiForm = lazy(() => import("./components/apis/CreateApiForm"));
 
-// Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -64,6 +68,7 @@ const App: React.FC = () => {
             element={<ApiDetail />}
           />
           <Route path="tables" element={<TableManager />} />
+          <Route path="tables/new" element={<CreateTableFormWrapper />} />
           <Route path="/tables/:tableId" element={<TableView />} />
           <Route path="services" element={<ComingSoon title="Services" />} />
           <Route path="data" element={<ComingSoon title="Data" />} />

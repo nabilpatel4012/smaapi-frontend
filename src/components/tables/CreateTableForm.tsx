@@ -1,42 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Plus, Save, Trash2, Key, Link as LinkIcon } from "lucide-react";
+import {
+  Plus,
+  Save,
+  Trash2,
+  Key,
+  Link as LinkIcon,
+  ArrowLeft,
+} from "lucide-react";
 import Button from "../common/Button";
 import Card from "../common/Card";
-
-interface Column {
-  name: string;
-  type: string;
-  required: boolean;
-  unique: boolean;
-  isPrimary: boolean;
-  isIndex: boolean;
-  defaultValue?: string;
-  foreignKey?: {
-    table: string;
-    column: string;
-  };
-}
-
-interface Index {
-  name: string;
-  columns: string[];
-  isUnique: boolean;
-}
-
-interface Table {
-  id?: string;
-  name: string;
-  description?: string;
-  columns: Column[];
-  indexes?: Index[];
-  createdAt?: string;
-}
+import { BaseTable, Table, Column, Index } from "./table.types";
+import apiClient from "../../utils/apiClient";
 
 interface CreateTableFormProps {
-  existingTables?: Table[];
+  existingTables: Table[];
   onTableCreated: (table: Table) => void;
   initialTableData?: Table;
+}
+
+interface Project {
+  project_id: number;
+  project_name: string;
+  db_type: string;
 }
 
 const dataTypes = [
@@ -59,11 +45,17 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
   onTableCreated,
   initialTableData,
 }) => {
-  const { projectId } = useParams();
+  const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const [projectDbType, setProjectDbType] = useState<string>("PostgreSQL");
+  const [projectDbType, setProjectDbType] = useState<string>("PG");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    projectId || ""
+  );
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
-  const [tableData, setTableData] = useState<Table>(
+  const [tableData, setTableData] = useState<BaseTable>(
     initialTableData || {
       name: "",
       description: "",
@@ -82,6 +74,39 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     Record<string, string>
   >({});
   const [showIndexForm, setShowIndexForm] = useState(false);
+
+  // Fetch projects on mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setIsLoadingProjects(true);
+        const response = await apiClient.get(
+          `/core/projects?select=["project_id","project_name","db_type"]`
+        );
+        const projectData = Array.isArray(response.data) ? response.data : [];
+        setProjects(projectData);
+
+        // Set projectDbType if editing and projectId matches
+        if (initialTableData && projectId) {
+          const selectedProject = projectData.find(
+            (p) => p.project_id.toString() === projectId
+          );
+          if (selectedProject) {
+            setSelectedProjectId(projectId);
+            setProjectDbType(selectedProject.db_type);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching projects:", err);
+        setProjectError("Failed to load projects");
+        setProjects([]);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+
+    fetchProjects();
+  }, [initialTableData, projectId]);
 
   useEffect(() => {
     if (initialTableData) {
@@ -188,6 +213,10 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
+    if (!selectedProjectId) {
+      errors.project = "Please select a project";
+    }
+
     if (!tableData.name.trim()) {
       errors.name = "Table name is required";
     }
@@ -218,7 +247,7 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
     const tableWithTimestamps = {
@@ -244,22 +273,83 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
       ],
     };
 
-    const newTable = {
-      ...tableWithTimestamps,
-      id: tableData.id || `table_${Date.now()}`,
-      createdAt: tableData.createdAt || new Date().toISOString(),
+    const apiPayload = {
+      table_name: tableWithTimestamps.name,
+      table_schema: {
+        columns: tableWithTimestamps.columns,
+        indexes: tableWithTimestamps.indexes || [],
+      },
     };
 
-    onTableCreated(newTable);
-    navigate(`/projects/${projectId}/tables`);
+    try {
+      const response = await apiClient.post(
+        `/core/${selectedProjectId}/tables`,
+        apiPayload
+      );
+
+      // Create a Table with required id and createdAt properties
+      const newTable: Table = {
+        ...tableWithTimestamps,
+        id: response.data.table_id?.toString() || `table_${Date.now()}`,
+        createdAt: response.data.created_at || new Date().toISOString(),
+      };
+
+      onTableCreated(newTable);
+      navigate(`/projects/${selectedProjectId}/tables`);
+    } catch (err) {
+      console.error("Error creating table:", err);
+      setValidationErrors({
+        ...validationErrors,
+        api: "Failed to create table. Please try again.",
+      });
+    }
   };
+
+  if (isLoadingProjects) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <svg
+            className="animate-spin h-8 w-8 text-indigo-600 mx-auto"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <p className="mt-2 text-gray-600">Loading projects...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {initialTableData ? "Edit Table" : "Create New Table"}
-        </h2>
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="secondary"
+            leftIcon={<ArrowLeft size={16} />}
+            onClick={() => navigate(`/tables`)}
+          >
+            Back to Tables
+          </Button>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {initialTableData ? "Edit Table" : "Create New Table"}
+          </h2>
+        </div>
         <Button
           variant="primary"
           leftIcon={<Save size={16} />}
@@ -272,6 +362,48 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
       <Card className="p-6">
         <div className="space-y-6">
           <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="project-select"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Project <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="project-select"
+                value={selectedProjectId}
+                onChange={(e) => {
+                  setSelectedProjectId(e.target.value);
+                  const selectedProject = projects.find(
+                    (p) => p.project_id.toString() === e.target.value
+                  );
+                  if (selectedProject) {
+                    setProjectDbType(selectedProject.db_type);
+                  }
+                  if (validationErrors.project) {
+                    const newErrors = { ...validationErrors };
+                    delete newErrors.project;
+                    setValidationErrors(newErrors);
+                  }
+                }}
+                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                  validationErrors.project ? "border-red-500" : ""
+                }`}
+              >
+                <option value="">Select a project</option>
+                {projects.map((project) => (
+                  <option key={project.project_id} value={project.project_id}>
+                    {project.project_name}
+                  </option>
+                ))}
+              </select>
+              {validationErrors.project && (
+                <p className="mt-1 text-sm text-red-500">
+                  {validationErrors.project}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Table Name <span className="text-red-500">*</span>
@@ -337,6 +469,12 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
             {validationErrors.primaryKey && (
               <p className="mb-4 text-sm text-red-500">
                 {validationErrors.primaryKey}
+              </p>
+            )}
+
+            {validationErrors.api && (
+              <p className="mb-4 text-sm text-red-500">
+                {validationErrors.api}
               </p>
             )}
 
@@ -495,16 +633,21 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
                           >
                             <option value="">No foreign key</option>
                             {existingTables.map((table) =>
-                              table.columns
-                                .filter((col) => col.isPrimary || col.unique)
-                                .map((col) => (
-                                  <option
-                                    key={`${table.id}-${col.name}`}
-                                    value={`${table.name}.${col.name}`}
-                                  >
-                                    {table.name}.{col.name}
-                                  </option>
-                                ))
+                              Array.isArray(table.columns) &&
+                              table.columns.length > 0
+                                ? table.columns
+                                    .filter(
+                                      (col) => col.isPrimary || col.unique
+                                    )
+                                    .map((col) => (
+                                      <option
+                                        key={`${table.id}-${col.name}`}
+                                        value={`${table.name}.${col.name}`}
+                                      >
+                                        {table.name}.{col.name}
+                                      </option>
+                                    ))
+                                : null
                             )}
                           </select>
                         </div>
@@ -533,7 +676,7 @@ const CreateTableForm: React.FC<CreateTableFormProps> = ({
             )}
           </div>
 
-          {(projectDbType === "PostgreSQL" || projectDbType === "MySQL") && (
+          {(projectDbType === "PG" || projectDbType === "MQL") && (
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Indexes</h3>

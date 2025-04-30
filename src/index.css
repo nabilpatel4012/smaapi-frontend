@@ -60,6 +60,24 @@ textarea {
   resize: vertical;
 }
 
-div:has(svg) > input::placeholder {
+div:has(svg) > input::-webkit-progress-value {
   padding-left: 25px;
+}
+
+/* Replace with better input styling for icons */
+.search-input-container {
+  position: relative;
+}
+
+.search-input-container svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #9ca3af; /* gray-400 */
+}
+
+.search-input-container input {
+  padding-left: 38px; /* Enough space for the icon + some padding */
 }

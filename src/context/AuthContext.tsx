@@ -1,10 +1,10 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect } from "react";
+import apiClient from "../utils/apiClient";
 
 interface User {
   id: string;
-  name: string;
+  username: string;
   email: string;
-  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -12,7 +12,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, phone: string, password: string) => Promise<void>;
+  signup: (
+    name: string,
+    email: string,
+    phone: string,
+    password: string
+  ) => Promise<void>;
   logout: () => void;
 }
 
@@ -25,14 +30,16 @@ export const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = () => {
-      const savedUser = localStorage.getItem('user');
+      const savedUser = localStorage.getItem("user");
       if (savedUser) {
         setUser(JSON.parse(savedUser));
       }
@@ -42,67 +49,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
-  // Mock login function
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful login - in a real app, validate credentials with an API
-      if (email && password) {
-        const user = {
-          id: '1',
-          name: 'Demo User',
-          email,
-          avatarUrl: 'https://ui-avatars.com/api/?name=Demo+User&background=3B82F6&color=fff',
-        };
-        
-        localStorage.setItem('user', JSON.stringify(user));
-        setUser(user);
-      } else {
-        throw new Error('Invalid credentials');
-      }
+      const response = await apiClient.post("/users/login", {
+        email,
+        password,
+      });
+      const {
+        access_token,
+        refresh_token,
+        user_id,
+        username,
+        email: userEmail,
+      } = response.data;
+
+      // Store tokens and user data
+      localStorage.setItem("access_token", access_token);
+      localStorage.setItem("refresh_token", refresh_token);
+      const userData: User = {
+        id: user_id.toString(),
+        username,
+        email: userEmail,
+      };
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+      console.error("Login error:", error);
+      throw new Error("Invalid email or password");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Mock signup function
-  const signup = async (name: string, email: string, phone: string, password: string) => {
+  const signup = async (
+    name: string,
+    email: string,
+    phone: string,
+    password: string
+  ) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock successful signup - in a real app, register user with an API
-      if (name && email && password) {
-        const user = {
-          id: '1',
-          name,
-          email,
-          avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3B82F6&color=fff`,
-        };
-        
-        localStorage.setItem('user', JSON.stringify(user));
-        setUser(user);
-      } else {
-        throw new Error('Invalid signup data');
-      }
+      // Implement signup API call if your backend supports it
+      const response = await apiClient.post("/users/signup", {
+        name,
+        email,
+        phone,
+        password,
+      });
+      const {
+        access_token,
+        refresh_token,
+        user_id,
+        username,
+        email: userEmail,
+      } = response.data;
+
+      localStorage.setItem("access_token", access_token);
+      localStorage.setItem("refresh_token", refresh_token);
+      const userData: User = {
+        id: user_id.toString(),
+        username,
+        email: userEmail,
+      };
+      localStorage.setItem("user", JSON.stringify(userData));
+      setUser(userData);
     } catch (error) {
-      console.error('Signup error:', error);
-      throw error;
+      console.error("Signup error:", error);
+      throw new Error("Signup failed");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Logout function
   const logout = () => {
-    localStorage.removeItem('user');
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
     setUser(null);
   };
 
