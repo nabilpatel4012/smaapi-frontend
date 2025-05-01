@@ -12,12 +12,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (
-    name: string,
-    email: string,
-    phone: string,
-    password: string
-  ) => Promise<void>;
+  signup: (payload: any) => Promise<void>;
   logout: () => void;
 }
 
@@ -82,21 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const signup = async (
-    name: string,
-    email: string,
-    phone: string,
-    password: string
-  ) => {
+  const signup = async (payload: any) => {
     setIsLoading(true);
     try {
       // Implement signup API call if your backend supports it
-      const response = await apiClient.post("/users/signup", {
-        name,
-        email,
-        phone,
-        password,
-      });
+      const response = await apiClient.post("/users", payload);
       const {
         access_token,
         refresh_token,

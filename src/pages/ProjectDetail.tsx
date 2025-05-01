@@ -11,6 +11,7 @@ import {
   Code,
   Loader,
   Search,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "../components/common/Button";
@@ -25,17 +26,18 @@ interface Project {
   project_name: string;
   project_description: string;
   db_type: string;
+  subdomain_url: string;
   created_at: string;
 }
 
 interface API {
   api_id: number;
   project_id: number;
-  name: string;
-  description: string;
-  method: string;
-  endpoint: string;
-  status: string;
+  api_name: string;
+  api_description: string;
+  http_method: string;
+  endpoint_path: string;
+  api_status: string;
   created_at: string;
 }
 
@@ -52,6 +54,7 @@ const ProjectDetail: React.FC = () => {
   const [methodFilter, setMethodFilter] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Fetch project details and APIs on component mount
   useEffect(() => {
@@ -87,11 +90,11 @@ const ProjectDetail: React.FC = () => {
   // Filter APIs based on search and filters
   const filteredApis = apis.filter((api) => {
     const matchesSearch =
-      api.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      api.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      api.endpoint.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = !statusFilter || api.status === statusFilter;
-    const matchesMethod = !methodFilter || api.method === methodFilter;
+      api.api_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      api.api_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      api.endpoint_path.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = !statusFilter || api.api_status === statusFilter;
+    const matchesMethod = !methodFilter || api.http_method === methodFilter;
 
     return matchesSearch && matchesStatus && matchesMethod;
   });
@@ -148,7 +151,6 @@ const ProjectDetail: React.FC = () => {
           await apiClient.put(`/core/apis/${api.api_id}/status`, {
             status: "active",
           });
-          // Update API in local state
           setApis(
             apis.map((a) =>
               a.api_id === api.api_id ? { ...a, status: "active" } : a
@@ -159,7 +161,6 @@ const ProjectDetail: React.FC = () => {
           await apiClient.put(`/core/apis/${api.api_id}/status`, {
             status: "inactive",
           });
-          // Update API in local state
           setApis(
             apis.map((a) =>
               a.api_id === api.api_id ? { ...a, status: "inactive" } : a
@@ -167,16 +168,15 @@ const ProjectDetail: React.FC = () => {
           );
           break;
         case "copy":
-          navigator.clipboard.writeText(api.endpoint);
+          navigator.clipboard.writeText(api.endpoint_path);
           break;
         case "delete":
           if (
             window.confirm(
-              `Are you sure you want to delete the API "${api.name}"?`
+              `Are you sure you want to delete the API "${api.api_name}"?`
             )
           ) {
             await apiClient.delete(`/core/apis/${api.api_id}`);
-            // Remove API from local state
             setApis(apis.filter((a) => a.api_id !== api.api_id));
           }
           break;
@@ -188,6 +188,15 @@ const ProjectDetail: React.FC = () => {
     }
   };
 
+  // Handle copy subdomain URL
+  const handleCopySubdomain = () => {
+    if (project?.subdomain_url) {
+      navigator.clipboard.writeText(`https://${project.subdomain_url}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+    }
+  };
+
   // Database type badge color mapping
   const getDatabaseColor = (dbType: string) => {
     const dbTypeMap: Record<string, string> = {
@@ -196,7 +205,6 @@ const ProjectDetail: React.FC = () => {
       MNGDB: "bg-green-100 text-green-800",
       SQLTE: "bg-purple-100 text-purple-800",
     };
-
     return dbTypeMap[dbType] || "bg-gray-100 text-gray-800";
   };
 
@@ -208,7 +216,6 @@ const ProjectDetail: React.FC = () => {
       MNGDB: "MongoDB",
       SQLTE: "SQLite",
     };
-
     return dbTypeMap[dbType] || dbType;
   };
 
@@ -286,6 +293,49 @@ const ProjectDetail: React.FC = () => {
             <p className="mt-2 text-sm text-gray-500">
               Created on {formatDate(project.created_at)}
             </p>
+            {/* Subdomain URL */}
+            {project.subdomain_url && (
+              <motion.div
+                className="mt-3 flex items-center space-x-2"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex items-center bg-gray-100 rounded-md px-3 py-1.5 border border-gray-200 hover:bg-gray-200 transition-colors flex-shrink-0 max-w-[400px]">
+                  <Globe size={16} className="text-gray-500 mr-2" />
+                  <a
+                    href={`https://${project.subdomain_url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-indigo-600 hover:text-indigo-800 truncate max-w-[350px]"
+                    title={project.subdomain_url}
+                    aria-label={`Visit project subdomain ${project.subdomain_url}`}
+                  >
+                    {project.subdomain_url}
+                  </a>
+                  <button
+                    onClick={handleCopySubdomain}
+                    className="ml-2 text-gray-500 hover:text-gray-700 relative group"
+                    aria-label={copied ? "URL copied" : "Copy URL"}
+                  >
+                    <motion.div
+                      initial={{ scale: 1 }}
+                      animate={{ scale: copied ? 1.2 : 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {copied ? (
+                        <Check size={16} className="text-green-500" />
+                      ) : (
+                        <Clipboard size={16} />
+                      )}
+                    </motion.div>
+                    <span className="absolute bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                      {copied ? "Copied!" : "Copy URL"}
+                    </span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
           <div className="mt-4 md:mt-0 flex items-center space-x-3">
             <Button
@@ -311,11 +361,14 @@ const ProjectDetail: React.FC = () => {
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex flex-wrap gap-4">
-          <div className="flex-grow search-input-container">
-            <Search size={18} className="text-gray-400" />
+          <div className="flex-grow search-input-container relative">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+            />
             <input
               type="text"
-              className="w-full pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
               placeholder="Search APIs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -400,25 +453,27 @@ const ProjectDetail: React.FC = () => {
                     to={`/projects/${projectId}/apis/${api.api_id}`}
                     className="hover:text-indigo-600"
                   >
-                    <h3 className="font-medium text-gray-900">{api.name}</h3>
+                    <h3 className="font-medium text-gray-900">
+                      {api.api_name}
+                    </h3>
                     <p className="text-sm text-gray-500 truncate">
-                      {api.description}
+                      {api.api_description}
                     </p>
                   </Link>
                 </div>
                 <div className="col-span-2">
                   <span
                     className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getMethodColor(
-                      api.method
+                      api.http_method
                     )}`}
                   >
-                    {api.method}
+                    {api.http_method}
                   </span>
                 </div>
                 <div className="col-span-3">
                   <div className="flex items-center">
                     <code className="text-sm text-gray-700 truncate max-w-[180px]">
-                      {api.endpoint}
+                      {api.endpoint_path}
                     </code>
                     <button
                       className="ml-2 text-gray-400 hover:text-gray-600"
@@ -429,7 +484,9 @@ const ProjectDetail: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                <div className="col-span-2">{getStatusBadge(api.status)}</div>
+                <div className="col-span-2">
+                  {getStatusBadge(api.api_status)}
+                </div>
                 <div className="col-span-1 text-right relative">
                   <button
                     className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"
@@ -462,7 +519,7 @@ const ProjectDetail: React.FC = () => {
                             <Code size={16} className="mr-2" />
                             View Details
                           </Link>
-                          {api.status === "active" ? (
+                          {api.api_status === "active" ? (
                             <button
                               className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                               onClick={() => handleApiAction(api, "stop")}

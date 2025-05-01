@@ -1,6 +1,7 @@
 // components/api/BasicInfoForm.tsx
 import React from "react";
 import { mockTables } from "../../mock/mockTables";
+import { Table } from "../tables/table.types";
 
 interface BasicInfoFormProps {
   apiName: string;
@@ -13,8 +14,10 @@ interface BasicInfoFormProps {
   setEndpointPath: (value: string) => void;
   endpointDescription: string;
   setEndpointDescription: (value: string) => void;
-  selectedTable: string;
-  setSelectedTable: (value: string) => void;
+  selectedTable: Table | "";
+  setSelectedTable: (value: Table | "") => void;
+  tables: Table[];
+  isLoadingTables: boolean;
 }
 
 const BasicInfoForm: React.FC<BasicInfoFormProps> = ({
@@ -30,6 +33,8 @@ const BasicInfoForm: React.FC<BasicInfoFormProps> = ({
   setEndpointDescription,
   selectedTable,
   setSelectedTable,
+  tables,
+  isLoadingTables,
 }) => {
   return (
     <div className="grid grid-cols-1 gap-y-6 gap-x-4 md:grid-cols-2">
@@ -90,19 +95,34 @@ const BasicInfoForm: React.FC<BasicInfoFormProps> = ({
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700">Table</label>
+        <label
+          htmlFor="table"
+          className="block text-sm font-medium text-gray-700"
+        >
+          Table
+        </label>
         <select
+          id="table"
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          value={selectedTable}
-          onChange={(e) => setSelectedTable(e.target.value)}
+          value={selectedTable ? selectedTable.id : ""}
+          onChange={(e) => {
+            const selected = tables.find(
+              (table) => table.id === e.target.value
+            );
+            setSelectedTable(selected || "");
+          }}
+          disabled={isLoadingTables}
         >
           <option value="">Select a table</option>
-          {mockTables.map((table) => (
-            <option key={table.id} value={table.name}>
+          {tables.map((table) => (
+            <option key={table.id} value={table.id}>
               {table.name}
             </option>
           ))}
         </select>
+        {isLoadingTables && (
+          <p className="mt-1 text-sm text-gray-500">Loading tables...</p>
+        )}
       </div>
 
       <div className="col-span-2">
